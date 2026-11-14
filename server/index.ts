@@ -301,7 +301,7 @@ app.get('/api/business-state', { preHandler: authenticate }, async (request: any
   const rows = await withShop(request, async (client) => {
     const [shop, user, products, customers, transactions, auditLogs] = await Promise.all([
       client.query('SELECT * FROM shops WHERE id = $1', [request.user.shopId]),
-      client.query('SELECT pin_hash FROM users WHERE id = $1', [request.user.userId]),
+      client.query('SELECT pin_hash, phone FROM users WHERE id = $1', [request.user.userId]),
       client.query('SELECT * FROM products WHERE shop_id = $1 ORDER BY name', [request.user.shopId]),
       client.query('SELECT * FROM customers WHERE shop_id = $1 ORDER BY name', [request.user.shopId]),
       client.query('SELECT * FROM transactions WHERE shop_id = $1 ORDER BY created_at DESC', [request.user.shopId]),
@@ -320,7 +320,7 @@ app.get('/api/business-state', { preHandler: authenticate }, async (request: any
       ownerName: rows.shop.owner_name,
       shopName: rows.shop.name,
       category: rows.shop.category,
-      phone: rows.shop.phone,
+      phone: rows.user?.phone || rows.shop.phone,
       upiId: settings.upiId || '',
       gstin: settings.gstin || '',
       udyamNo: settings.udyamNo || '',
@@ -492,6 +492,7 @@ app.patch('/api/shop/settings', {
   const body = z.object({
     ownerName: z.string().trim().min(1).max(120),
     shopName: z.string().trim().min(1).max(160),
+    category: z.string().trim().max(120),
     language: z.enum(['en', 'hi', 'bho', 'mai', 'bn']),
     upiId: z.string().trim().max(120),
     gstin: z.string().trim().max(32),
@@ -499,11 +500,13 @@ app.patch('/api/shop/settings', {
   }).parse(request.body);
   await withShop(request, (client) => client.query(
     `UPDATE shops
-     SET owner_name = $1, name = $2, settings = settings || $3::jsonb, updated_at = now()
-     WHERE id = $4`,
+     SET owner_name = $1, name = $2, category = $3,
+         settings = settings || $4::jsonb, updated_at = now()
+     WHERE id = $5`,
     [
       body.ownerName,
       body.shopName,
+      body.category,
       JSON.stringify({
         language: body.language,
         upiId: body.upiId,

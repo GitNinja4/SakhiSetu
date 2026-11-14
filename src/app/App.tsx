@@ -28,6 +28,7 @@ function App() {
 
   const [activePage, setActivePage] = useState('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false);
   const [sakhiDrawerOpen, setSakhiDrawerOpen] = useState(false);
   const [quickEntryOpen, setQuickEntryOpen] = useState(false);
   const [toast, setToast] = useState(null);
@@ -43,8 +44,27 @@ function App() {
   const [speechProgress, setSpeechProgress] = useState(0);
   const [isVoiceMuted, setIsVoiceMuted] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
+  const profileMenuRef = useRef(null);
   const speechFallbackTimerRef = useRef(null);
   const chatScrollRef = useRef(null);
+
+  useEffect(() => {
+    if (!profileMenuOpen) return undefined;
+    const closeOnOutsideClick = (event) => {
+      if (event.target instanceof Node && !profileMenuRef.current?.contains(event.target)) {
+        setProfileMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setProfileMenuOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [profileMenuOpen]);
 
   useEffect(() => {
     if (chatScrollRef.current) {
@@ -290,6 +310,8 @@ function App() {
   };
 
   const handleLogout = async () => {
+    setProfileMenuOpen(false);
+    setMobileMenuOpen(false);
     try {
       const response = await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
       if (!response.ok) throw new Error('Could not sign out.');
@@ -531,6 +553,13 @@ function App() {
   ];
 
   const firstName = state.profile.ownerName.split(' ')[0];
+  const roleLabel = userRole === 'owner'
+    ? t('roleOwner')
+    : userRole === 'accountant'
+      ? t('roleAccountant')
+      : userRole === 'staff'
+        ? t('roleStaff')
+        : t('roleOwner');
   const currentNavLabel =
     activePage === 'overview'
       ? `${t('greeting')}, ${firstName}`
@@ -556,11 +585,11 @@ function App() {
 
       {/* LEFT SIDEBAR NAVIGATION */}
       <aside
-        className={`fixed lg:sticky top-0 left-0 z-40 h-screen w-64 bg-white border-r border-[#EBE7E0] flex flex-col justify-between transition-transform duration-200 ${
+        className={`fixed lg:sticky top-0 left-0 z-40 h-[100dvh] w-64 bg-white border-r border-[#EBE7E0] flex flex-col overflow-hidden transition-transform duration-200 ${
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
-        <div className="p-5">
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5">
           <div className="flex items-center gap-3 mb-8 px-1">
             <div className="w-10 h-10 rounded-xl bg-[#146C43] text-white flex items-center justify-center font-bold text-lg shadow-xs shrink-0">
               स
@@ -613,7 +642,7 @@ function App() {
           </nav>
         </div>
 
-        <div className="p-4 border-t border-[#F0EDE6] space-y-1">
+        <div className="shrink-0 p-4 pb-5 border-t border-[#F0EDE6] bg-white space-y-1">
           <button
             onClick={() => {
               setActivePage('settings');
@@ -695,13 +724,55 @@ function App() {
               )}
             </button>
 
-            <button
-              onClick={() => setActivePage('settings')}
-              className="w-8 h-8 rounded-full bg-[#E8C9A9] text-[#5C3D1E] font-bold text-xs flex items-center justify-center shrink-0"
-              title={state.profile.ownerName}
-            >
-              {firstName.charAt(0)}
-            </button>
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                type="button"
+                onClick={() => setProfileMenuOpen((open) => !open)}
+                className="w-9 h-9 rounded-full bg-[#E8C9A9] text-[#5C3D1E] font-bold text-xs flex items-center justify-center shrink-0 ring-2 ring-transparent hover:ring-[#D8C1A9] focus:outline-none focus:ring-[#146C43]"
+                title={state.profile.ownerName}
+                aria-label={t('accountProfileTitle')}
+                aria-haspopup="menu"
+                aria-expanded={profileMenuOpen}
+              >
+                {firstName.charAt(0)}
+              </button>
+              {profileMenuOpen && (
+                <div
+                  role="menu"
+                  className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-[#EBE7E0] bg-white shadow-xl"
+                >
+                  <div className="border-b border-[#F0EDE6] px-4 py-4">
+                    <p className="truncate text-sm font-bold text-[#1E2421]">{state.profile.ownerName}</p>
+                    <p className="mt-0.5 truncate text-xs text-[#6B726E]">{state.profile.shopName}</p>
+                    <p className="mt-2 text-xs font-medium text-[#146C43]">
+                      {roleLabel} · {state.profile.phone}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setActivePage('settings');
+                      setMobileMenuOpen(false);
+                      setProfileMenuOpen(false);
+                    }}
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium text-[#37413C] hover:bg-[#F5F3EE]"
+                  >
+                    <Settings className="h-4 w-4 text-[#6B726E]" />
+                    {t('manageProfileBtn')}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-3 border-t border-[#F0EDE6] px-4 py-3 text-left text-sm font-semibold text-red-700 hover:bg-red-50"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    {t('logoutBtn')}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
@@ -768,6 +839,7 @@ function App() {
               notify={notify}
               isDemo={sessionShopId === 'demo'}
               canManageStaff={userRole === 'owner'}
+              userRole={userRole}
             />
           )}
         </main>

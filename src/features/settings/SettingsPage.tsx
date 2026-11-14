@@ -1,12 +1,25 @@
 import React, { useState } from 'react';
+import { LANG_META } from '../../i18n/translations';
 
-function SettingsPage({ state, setState, t, notify, isDemo, canManageStaff }) {
+function SettingsPage({ state, setState, t, notify, isDemo, canManageStaff, userRole }) {
   const [pin, setPin] = useState('');
   const [pinBusy, setPinBusy] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
   const [invitePhone, setInvitePhone] = useState('');
   const [inviteRole, setInviteRole] = useState('staff');
   const [inviteBusy, setInviteBusy] = useState(false);
+  const canEditShop = canManageStaff || isDemo;
+  const roleLabel = userRole === 'owner'
+    ? t('roleOwner')
+    : userRole === 'accountant'
+      ? t('roleAccountant')
+      : userRole === 'staff'
+        ? t('roleStaff')
+        : t('roleOwner');
+
+  const updateProfile = (key, value) => {
+    setState((prev) => ({ ...prev, profile: { ...prev.profile, [key]: value } }));
+  };
 
   const saveProfile = async () => {
     if (isDemo) {
@@ -102,44 +115,142 @@ function SettingsPage({ state, setState, t, notify, isDemo, canManageStaff }) {
         <p className="text-sm text-[#6B726E] mt-1">{t('settingsSub')}</p>
       </div>
 
-      <div className="bg-white rounded-2xl border border-[#EBE7E0] p-6 space-y-4">
-        <h3 className="font-bold text-base text-[#1E2421]">{t('businessProfileTitle')}</h3>
+      <section className="rounded-2xl border border-[#EBE7E0] bg-white p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#EAF5EE] text-xl font-bold text-[#146C43]">
+              {state.profile.ownerName.trim().charAt(0).toUpperCase() || 'S'}
+            </div>
+            <div className="min-w-0">
+              <h2 className="text-lg font-bold text-[#1E2421]">{t('accountProfileTitle')}</h2>
+              <p className="mt-0.5 truncate text-sm font-semibold text-[#37413C]">{state.profile.ownerName}</p>
+              <p className="mt-1 break-all text-xs text-[#6B726E]">
+                {t('verifiedMobileLabel')}: {state.profile.phone || '—'}
+              </p>
+            </div>
+          </div>
+          <span className="w-fit rounded-full bg-[#EAF5EE] px-3 py-1 text-xs font-bold text-[#146C43]">
+            {roleLabel}
+          </span>
+        </div>
+        <p className="mt-4 border-t border-[#F0EDE6] pt-3 text-xs leading-relaxed text-[#6B726E]">
+          {t('profilePhoneNote')}
+        </p>
+      </section>
+
+      <section className="rounded-2xl border border-[#EBE7E0] bg-white p-5 sm:p-6 space-y-5">
+        <div>
+          <h2 className="font-bold text-base text-[#1E2421]">{t('shopDetailsTitle')}</h2>
+          <p className="mt-1 text-xs text-[#6B726E]">{t('businessProfileTitle')}</p>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs font-semibold text-[#5B635E] block mb-1">{t('ownerNameLabel')}</label>
+            <label htmlFor="settings-owner-name" className="text-xs font-semibold text-[#5B635E] block mb-1">{t('ownerNameLabel')}</label>
             <input
+              id="settings-owner-name"
               type="text"
               value={state.profile.ownerName}
-              onChange={(e) =>
-                setState((prev) => ({ ...prev, profile: { ...prev.profile, ownerName: e.target.value } }))
-              }
-              className="w-full p-2.5 rounded-xl border border-[#DCD7CD] text-sm"
+              onChange={(event) => updateProfile('ownerName', event.target.value)}
+              disabled={!canEditShop}
+              className="w-full p-2.5 rounded-xl border border-[#DCD7CD] text-sm disabled:bg-[#F5F3EE] disabled:text-[#6B726E]"
             />
           </div>
           <div>
-            <label className="text-xs font-semibold text-[#5B635E] block mb-1">{t('shopNameLabel')}</label>
+            <label htmlFor="settings-shop-name" className="text-xs font-semibold text-[#5B635E] block mb-1">{t('shopNameLabel')}</label>
             <input
+              id="settings-shop-name"
               type="text"
               value={state.profile.shopName}
-              onChange={(e) =>
-                setState((prev) => ({ ...prev, profile: { ...prev.profile, shopName: e.target.value } }))
-              }
-              className="w-full p-2.5 rounded-xl border border-[#DCD7CD] text-sm"
+              onChange={(event) => updateProfile('shopName', event.target.value)}
+              disabled={!canEditShop}
+              className="w-full p-2.5 rounded-xl border border-[#DCD7CD] text-sm disabled:bg-[#F5F3EE] disabled:text-[#6B726E]"
             />
           </div>
+          <div>
+            <label htmlFor="settings-shop-category" className="text-xs font-semibold text-[#5B635E] block mb-1">{t('shopCategoryLabel')}</label>
+            <select
+              id="settings-shop-category"
+              value={state.profile.category}
+              onChange={(event) => updateProfile('category', event.target.value)}
+              disabled={!canEditShop}
+              className="w-full p-2.5 rounded-xl border border-[#DCD7CD] bg-white text-sm disabled:bg-[#F5F3EE]"
+            >
+              <option value="Handloom, Sarees & Boutique">Handloom & Boutique</option>
+              <option value="Kirana & Daily Essentials">Kirana / Grocery</option>
+              <option value="Beauty & Wellness Parlour">Beauty Parlour</option>
+              <option value="Tiffin & Home Bakery">Tiffin & Food</option>
+              <option value="Handicrafts & Jute">Handicrafts</option>
+            </select>
+          </div>
+          <div>
+            <label htmlFor="settings-upi-id" className="text-xs font-semibold text-[#5B635E] block mb-1">{t('merchantUpiLabel')}</label>
+            <input
+              id="settings-upi-id"
+              type="text"
+              autoComplete="off"
+              value={state.profile.upiId}
+              onChange={(event) => updateProfile('upiId', event.target.value)}
+              disabled={!canEditShop}
+              placeholder="name@bank"
+              className="w-full p-2.5 rounded-xl border border-[#DCD7CD] text-sm disabled:bg-[#F5F3EE] disabled:text-[#6B726E]"
+            />
+          </div>
+          <div>
+            <label htmlFor="settings-gstin" className="text-xs font-semibold text-[#5B635E] block mb-1">{t('gstinLabel')}</label>
+            <input
+              id="settings-gstin"
+              type="text"
+              autoComplete="off"
+              value={state.profile.gstin}
+              onChange={(event) => updateProfile('gstin', event.target.value.toUpperCase())}
+              disabled={!canEditShop}
+              maxLength={32}
+              className="w-full p-2.5 rounded-xl border border-[#DCD7CD] text-sm uppercase disabled:bg-[#F5F3EE] disabled:text-[#6B726E]"
+            />
+          </div>
+          <div>
+            <label htmlFor="settings-udyam-number" className="text-xs font-semibold text-[#5B635E] block mb-1">{t('udyamLabel')}</label>
+            <input
+              id="settings-udyam-number"
+              type="text"
+              autoComplete="off"
+              value={state.profile.udyamNo}
+              onChange={(event) => updateProfile('udyamNo', event.target.value.toUpperCase())}
+              disabled={!canEditShop}
+              maxLength={48}
+              className="w-full p-2.5 rounded-xl border border-[#DCD7CD] text-sm uppercase disabled:bg-[#F5F3EE] disabled:text-[#6B726E]"
+            />
+          </div>
+          <div>
+            <label htmlFor="settings-language" className="text-xs font-semibold text-[#5B635E] block mb-1">{t('languageLabel')}</label>
+            <select
+              id="settings-language"
+              value={state.profile.language}
+              onChange={(event) => updateProfile('language', event.target.value)}
+              className="w-full p-2.5 rounded-xl border border-[#DCD7CD] bg-white text-sm"
+            >
+              {LANG_META.map((language) => (
+                <option key={language.code} value={language.code}>{language.native}</option>
+              ))}
+            </select>
+          </div>
         </div>
-
+        {!canEditShop && (
+          <p className="rounded-xl bg-[#FAF8F5] p-3 text-xs leading-relaxed text-[#6B726E]">
+            {t('ownerOnlyProfileNote')}
+          </p>
+        )}
         <div className="flex justify-end">
           <button
             type="button"
             onClick={saveProfile}
-            disabled={profileBusy}
+            disabled={profileBusy || !canEditShop}
             className="px-4 py-2 rounded-xl bg-[#146C43] text-white text-xs font-bold disabled:opacity-60"
           >
-            {profileBusy ? 'Saving…' : 'Save profile'}
+            {profileBusy ? 'Saving…' : t('saveProfileBtn')}
           </button>
         </div>
-      </div>
+      </section>
 
       {canManageStaff && !isDemo && (
         <form onSubmit={inviteStaff} className="bg-white rounded-2xl border border-[#EBE7E0] p-6 space-y-4">
