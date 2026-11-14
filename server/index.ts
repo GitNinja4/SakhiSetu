@@ -25,10 +25,20 @@ const config = z.object({
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
 }).parse(process.env);
 
+const passwordSchema = z.string()
+  .min(12, 'Password must be at least 12 characters.')
+  .max(72, 'Password must be no more than 72 characters.')
+  .refine((password) => Buffer.byteLength(password, 'utf8') <= 72, 'Password is too long.');
+const loginPasswordSchema = z.string()
+  .min(1)
+  .max(72)
+  .refine((password) => Buffer.byteLength(password, 'utf8') <= 72, 'Password is too long.');
+
 const app = Fastify({ logger: true, trustProxy: config.NODE_ENV === 'production' });
 const pool = new Pool({ connectionString: config.DATABASE_URL });
 const SESSION_COOKIE = 'sakhisetu_session';
 const sessionTtlSeconds = 60 * 60 * 8;
+const dummyPasswordHash = await bcrypt.hash(randomUUID(), 12);
 
 await app.register(cookie);
 await app.register(rawBody, {
@@ -148,6 +158,37 @@ function setSession(reply: any, user: { userId: string; shopId: string; role: st
   });
 }
 
+async function verifyPhoneOtp(phone: string, code: string) {
+  const url = `https://verify.twilio.com/v2/Services/${config.TWILIO_VERIFY_SERVICE_SID}/VerificationCheck`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${Buffer.from(`${config.TWILIO_ACCOUNT_SID}:${config.TWILIO_AUTH_TOKEN}`).toString('base64')}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ To: phone, Code: code }),
+  });
+  if (!response.ok) return false;
+  const verification = await response.json();
+  return verification.status === 'approved';
+}
+
+async function storeUserPassword(client: any, user: any, passwordHash: string) {
+  await client.query(
+    "SELECT set_config('app.shop_id', $1, true), set_config('app.user_id', $2, true)",
+    [user.shop_id, user.id],
+  );
+  const result = await client.query(
+    'UPDATE users SET password_hash = $1, pin_hash = NULL WHERE id = $2 AND shop_id = $3',
+    [passwordHash, user.id, user.shop_id],
+  );
+  if (result.rowCount !== 1) {
+    const error = new Error('Could not update account password.');
+    Object.assign(error, { statusCode: 500 });
+    throw error;
+  }
+}
+
 app.get('/api/health', async () => {
   await pool.query('SELECT 1');
   return { status: 'ok' };
@@ -173,6 +214,43 @@ app.post('/api/auth/otp/send', {
     return reply.code(502).send({ error: 'Could not send verification code.' });
   }
   return reply.code(202).send({ status: 'pending' });
+});
+
+app.post('/api/auth/login', {
+  config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },
+}, async (request: any, reply) => {
+  const body = z.object({
+    phone: z.string(),
+    password: loginPasswordSchema,
+  }).parse(request.body);
+  const phone = normalizePhone(body.phone);
+  const found = await pool.query(
+    'SELECT id, shop_id, role FROM auth_find_users($1)',
+    [phone],
+  );
+  if (found.rows.length !== 1) {
+    await bcrypt.compare(body.password, dummyPasswordHash);
+    return reply.code(401).send({ error: 'Incorrect mobile number or password. Use the OTP option to set or reset your password.' });
+  }
+
+  const candidate = found.rows[0];
+  const account = await withShop(
+    { user: { userId: candidate.id, shopId: candidate.shop_id } },
+    async (client) => {
+      const result = await client.query(
+        'SELECT password_hash FROM users WHERE id = $1 AND shop_id = $2',
+        [candidate.id, candidate.shop_id],
+      );
+      return result.rows[0];
+    },
+  );
+  const matches = await bcrypt.compare(body.password, account?.password_hash || dummyPasswordHash);
+  if (!account?.password_hash || !matches) {
+    return reply.code(401).send({ error: 'Incorrect mobile number or password. Use the OTP option to set or reset your password.' });
+  }
+
+  setSession(reply, { userId: candidate.id, shopId: candidate.shop_id, role: candidate.role });
+  return { status: 'authenticated', role: candidate.role, shopId: candidate.shop_id };
 });
 
 app.post('/api/staff/invites', {
@@ -222,25 +300,18 @@ app.post('/api/auth/otp/verify', {
   const body = z.object({
     phone: z.string(),
     code: z.string().regex(/^\d{4,10}$/),
-    ownerName: z.string().trim().min(1).max(120).optional(),
-    shopName: z.string().trim().min(1).max(160).optional(),
+    password: passwordSchema,
+    ownerName: z.string().trim().min(1).max(120),
+    shopName: z.string().trim().min(1).max(160),
     category: z.string().trim().max(120).optional(),
     language: z.enum(['en', 'hi', 'bho', 'mai', 'bn']).default('en'),
   }).parse(request.body);
   const phone = normalizePhone(body.phone);
-  const url = `https://verify.twilio.com/v2/Services/${config.TWILIO_VERIFY_SERVICE_SID}/VerificationCheck`;
-  const verification = await fetch(url, {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${Buffer.from(`${config.TWILIO_ACCOUNT_SID}:${config.TWILIO_AUTH_TOKEN}`).toString('base64')}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({ To: phone, Code: body.code }),
-  });
-  if (!verification.ok || (await verification.json()).status !== 'approved') {
+  if (!(await verifyPhoneOtp(phone, body.code))) {
     return reply.code(401).send({ error: 'The verification code is invalid or expired.' });
   }
 
+  const passwordHash = await bcrypt.hash(body.password, 12);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -248,33 +319,77 @@ app.post('/api/auth/otp/verify', {
       `SELECT id, shop_id, role FROM auth_find_users($1)`,
       [phone],
     );
-    let user = found.rows[0];
+    if (found.rows.length > 0) {
+      const error = new Error('This phone number is already registered. Log in or set/reset your password.');
+      Object.assign(error, { statusCode: 409 });
+      throw error;
+    }
+    const created = await client.query(
+      `SELECT id, shop_id, role
+       FROM auth_create_shop($1, $2, $3, $4, $5)`,
+      [phone, body.ownerName, body.shopName, body.category || '', body.language],
+    );
+    const user = created.rows[0];
+    if (!user) {
+      const error = new Error('Could not create the shop account.');
+      Object.assign(error, { statusCode: 500 });
+      throw error;
+    }
+    await storeUserPassword(client, user, passwordHash);
+    await client.query('COMMIT');
+    setSession(reply, { userId: user.id, shopId: user.shop_id, role: user.role });
+    return { status: 'authenticated', role: user.role, shopId: user.shop_id };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+});
+
+app.post('/api/auth/password/reset', {
+  config: { rateLimit: { max: 8, timeWindow: '10 minutes' } },
+}, async (request: any, reply) => {
+  requireConfigured('TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_VERIFY_SERVICE_SID');
+  const body = z.object({
+    phone: z.string(),
+    code: z.string().regex(/^\d{4,10}$/),
+    password: passwordSchema,
+  }).parse(request.body);
+  const phone = normalizePhone(body.phone);
+  if (!(await verifyPhoneOtp(phone, body.code))) {
+    return reply.code(401).send({ error: 'The verification code is invalid or expired.' });
+  }
+
+  const passwordHash = await bcrypt.hash(body.password, 12);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const found = await client.query(
+      'SELECT id, shop_id, role FROM auth_find_users($1)',
+      [phone],
+    );
     if (found.rows.length > 1) {
       const error = new Error('This number belongs to more than one shop. Contact support.');
       Object.assign(error, { statusCode: 409 });
       throw error;
     }
+
+    let user = found.rows[0];
     if (!user) {
-      if (body.ownerName && body.shopName) {
-        const created = await client.query(
-          `SELECT id, shop_id, role
-           FROM auth_create_shop($1, $2, $3, $4, $5)`,
-          [phone, body.ownerName, body.shopName, body.category || '', body.language],
-        );
-        user = created.rows[0];
-      } else {
-        const invited = await client.query(
-          'SELECT id, shop_id, role FROM auth_accept_invite($1)',
-          [phone],
-        );
-        user = invited.rows[0];
-      }
-      if (!user) {
-        const error = new Error('Shop name and owner name are required for sign-up.');
-        Object.assign(error, { statusCode: 422 });
-        throw error;
-      }
+      const invited = await client.query(
+        'SELECT id, shop_id, role FROM auth_accept_invite($1)',
+        [phone],
+      );
+      user = invited.rows[0];
     }
+    if (!user) {
+      const error = new Error('No account or active shop invitation was found for this number.');
+      Object.assign(error, { statusCode: 404 });
+      throw error;
+    }
+
+    await storeUserPassword(client, user, passwordHash);
     await client.query('COMMIT');
     setSession(reply, { userId: user.id, shopId: user.shop_id, role: user.role });
     return { status: 'authenticated', role: user.role, shopId: user.shop_id };
@@ -301,7 +416,7 @@ app.get('/api/business-state', { preHandler: authenticate }, async (request: any
   const rows = await withShop(request, async (client) => {
     const [shop, user, products, customers, transactions, auditLogs] = await Promise.all([
       client.query('SELECT * FROM shops WHERE id = $1', [request.user.shopId]),
-      client.query('SELECT pin_hash, phone FROM users WHERE id = $1', [request.user.userId]),
+      client.query('SELECT phone FROM users WHERE id = $1', [request.user.userId]),
       client.query('SELECT * FROM products WHERE shop_id = $1 ORDER BY name', [request.user.shopId]),
       client.query('SELECT * FROM customers WHERE shop_id = $1 ORDER BY name', [request.user.shopId]),
       client.query('SELECT * FROM transactions WHERE shop_id = $1 ORDER BY created_at DESC', [request.user.shopId]),
@@ -325,7 +440,6 @@ app.get('/api/business-state', { preHandler: authenticate }, async (request: any
       gstin: settings.gstin || '',
       udyamNo: settings.udyamNo || '',
       language: settings.language || 'en',
-      pinEnabled: Boolean(rows.user?.pin_hash),
     },
     offlineMode: false,
     products: rows.products.map((product: any) => ({
@@ -376,46 +490,6 @@ app.get('/api/business-state', { preHandler: authenticate }, async (request: any
       hash: '',
     })),
   };
-});
-
-app.post('/api/auth/pin/set', {
-  preHandler: authorize('owner'),
-}, async (request: any) => {
-  const { pin } = z.object({ pin: z.string().regex(/^\d{4}$/) }).parse(request.body);
-  const hash = await bcrypt.hash(pin, 12);
-  await withShop(request, (client) => client.query(
-    'UPDATE users SET pin_hash = $1 WHERE id = $2 AND shop_id = $3',
-    [hash, request.user.userId, request.user.shopId],
-  ));
-  return { status: 'updated' };
-});
-
-app.post('/api/auth/pin/verify', {
-  preHandler: authenticate,
-  config: { rateLimit: { max: 5, timeWindow: '10 minutes' } },
-}, async (request: any, reply) => {
-  const { pin } = z.object({ pin: z.string().regex(/^\d{4}$/) }).parse(request.body);
-  const row = await withShop(request, async (client) => {
-    const result = await client.query(
-      'SELECT pin_hash FROM users WHERE id = $1 AND shop_id = $2',
-      [request.user.userId, request.user.shopId],
-    );
-    return result.rows[0];
-  });
-  if (!row?.pin_hash || !(await bcrypt.compare(pin, row.pin_hash))) {
-    return reply.code(401).send({ error: 'Incorrect PIN.' });
-  }
-  return { status: 'verified' };
-});
-
-app.delete('/api/auth/pin', {
-  preHandler: authorize('owner'),
-}, async (request: any) => {
-  await withShop(request, (client) => client.query(
-    'UPDATE users SET pin_hash = NULL WHERE id = $1 AND shop_id = $2',
-    [request.user.userId, request.user.shopId],
-  ));
-  return { status: 'disabled' };
 });
 
 app.post('/api/products', {

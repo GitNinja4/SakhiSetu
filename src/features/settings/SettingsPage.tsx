@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import { LANG_META } from '../../i18n/translations';
 
 function SettingsPage({ state, setState, t, notify, isDemo, canManageStaff, userRole }) {
-  const [pin, setPin] = useState('');
-  const [pinBusy, setPinBusy] = useState(false);
   const [profileBusy, setProfileBusy] = useState(false);
   const [invitePhone, setInvitePhone] = useState('');
   const [inviteRole, setInviteRole] = useState('staff');
@@ -42,47 +40,6 @@ function SettingsPage({ state, setState, t, notify, isDemo, canManageStaff, user
       notify(error instanceof Error ? error.message : 'Could not save shop settings.');
     } finally {
       setProfileBusy(false);
-    }
-  };
-
-  const updatePin = async () => {
-    setPinBusy(true);
-    try {
-      const response = await fetch('/api/auth/pin/set', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pin }),
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Could not set PIN.');
-      setState((prev) => ({ ...prev, profile: { ...prev.profile, pinEnabled: true } }));
-      setPin('');
-      notify('Quick-unlock PIN enabled.');
-    } catch (error) {
-      console.error('Failed to update quick-unlock PIN.', error);
-      notify(error instanceof Error ? error.message : 'Could not set PIN.');
-    } finally {
-      setPinBusy(false);
-    }
-  };
-
-  const disablePin = async () => {
-    setPinBusy(true);
-    try {
-      const response = await fetch('/api/auth/pin', {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Could not disable PIN.');
-      setState((prev) => ({ ...prev, profile: { ...prev.profile, pinEnabled: false } }));
-      notify('Quick-unlock PIN disabled.');
-    } catch (error) {
-      console.error('Failed to disable quick-unlock PIN.', error);
-      notify(error instanceof Error ? error.message : 'Could not disable PIN.');
-    } finally {
-      setPinBusy(false);
     }
   };
 
@@ -288,49 +245,6 @@ function SettingsPage({ state, setState, t, notify, isDemo, canManageStaff, user
         </form>
       )}
 
-      <div className="bg-white rounded-2xl border border-[#EBE7E0] p-6 space-y-4">
-        <h3 className="font-bold text-base text-[#1E2421]">{t('securityOfflineTitle')}</h3>
-        <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl bg-[#FAF8F5] border border-[#EBE7E0]">
-          <div>
-            <div className="text-sm font-bold text-[#1E2421]">{t('pinLockTitle')}</div>
-            <div className="text-xs text-[#6B726E]">
-              {state.profile.pinEnabled ? 'PIN is securely stored on the server.' : t('pinLockSub')}
-            </div>
-          </div>
-          {state.profile.pinEnabled ? (
-            <button
-              type="button"
-              onClick={disablePin}
-              disabled={pinBusy}
-              className="px-4 py-2 rounded-xl text-xs font-bold bg-[#EBE7E0] text-[#37413C] disabled:opacity-60"
-            >
-              Disable PIN
-            </button>
-          ) : (
-            <div className="flex items-center gap-2">
-              <input
-                type="password"
-                inputMode="numeric"
-                autoComplete="new-password"
-                maxLength={4}
-                value={pin}
-                onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))}
-                aria-label="Quick-unlock PIN"
-                placeholder="4-digit PIN"
-                className="w-28 px-3 py-2 rounded-lg border border-[#DCD7CD] text-sm tracking-widest"
-              />
-              <button
-                type="button"
-                onClick={updatePin}
-                disabled={pinBusy || pin.length !== 4}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-[#146C43] text-white disabled:opacity-60"
-              >
-                {pinBusy ? 'Saving…' : 'Set PIN'}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
     </div>
   );
 }

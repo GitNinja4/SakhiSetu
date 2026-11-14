@@ -11,7 +11,6 @@ export const INITIAL_STATE: BusinessState = {
     gstin: '10AABCS4821M1Z2',
     udyamNo: 'UDYAM-BR-26-0094812',
     language: 'en',
-    pinEnabled: false,
   },
   offlineMode: false,
   products: [
@@ -50,7 +49,6 @@ export function createEmptyBusinessState(profile: Partial<BusinessState['profile
     profile: {
       ...INITIAL_STATE.profile,
       ...profile,
-      pinEnabled: profile.pinEnabled ?? false,
     },
     offlineMode: false,
     products: [],

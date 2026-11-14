@@ -11,7 +11,6 @@ export interface BusinessProfile {
   gstin: string;
   udyamNo: string;
   language: LanguageCode;
-  pinEnabled: boolean;
 }
 
 export interface Product {

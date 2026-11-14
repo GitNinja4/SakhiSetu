@@ -6,7 +6,6 @@ import { parseSakhiIntent } from '../domain/intentParser';
 import { useBusinessState } from '../data/useBusinessState';
 import { queuePendingTransactions, syncPendingTransactions } from '../data/syncPendingTransactions';
 import { createTransaction, applyTransaction } from '../domain/ledger';
-import { createEmptyBusinessState } from '../domain/initialState';
 import WelcomeLandingView from '../features/auth/WelcomeLandingView';
 import AuthScreenView from '../features/auth/AuthScreenView';
 import OverviewPage from '../features/dashboard/pages/OverviewPage';
@@ -32,9 +31,6 @@ function App() {
   const [sakhiDrawerOpen, setSakhiDrawerOpen] = useState(false);
   const [quickEntryOpen, setQuickEntryOpen] = useState(false);
   const [toast, setToast] = useState(null);
-
-  const [locked, setLocked] = useState(false);
-  const [pinEntry, setPinEntry] = useState('');
 
   const [chatInput, setChatInput] = useState('');
   const [isListening, setIsListening] = useState(false);
@@ -116,7 +112,6 @@ function App() {
       .then((businessState) => {
         if (!active) return;
         setState(businessState);
-        setLocked(Boolean(businessState.profile.pinEnabled));
         setEntryView('dashboard');
       })
       .catch((error) => {
@@ -296,7 +291,6 @@ function App() {
 
   const handleQuickDemo = () => {
     setSessionShopId('demo');
-    setLocked(false);
     setActivePage('overview');
     setEntryView('dashboard');
   };
@@ -323,7 +317,6 @@ function App() {
     setSakhiDrawerOpen(false);
     setSessionShopId(null);
     setUserRole(null);
-    setLocked(false);
     setEntryView('welcome');
   };
 
@@ -491,53 +484,6 @@ function App() {
     return (
       <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center text-sm font-semibold text-[#5B635E]">
         Loading your shop workspace…
-      </div>
-    );
-  }
-
-  if (locked) {
-    return (
-      <div className="min-h-screen bg-[#FAF8F5] flex items-center justify-center p-4">
-        <div className="bg-white border border-[#EBE7E0] rounded-2xl max-w-sm w-full p-8 text-center shadow-sm">
-          <div className="w-12 h-12 rounded-xl bg-[#146C43] text-white flex items-center justify-center mx-auto mb-4 font-bold text-xl">
-            स
-          </div>
-          <h2 className="text-xl font-bold text-[#1E2421]">{state.profile.shopName}</h2>
-          <p className="text-sm text-[#6B726E] mt-1">{t('unlockWorkspaceTitle')}</p>
-          <input
-            type="password"
-            maxLength={4}
-            value={pinEntry}
-            onChange={(e) => setPinEntry(e.target.value.replace(/\D/g, ''))}
-            placeholder="••••"
-            className="mt-5 w-40 text-center text-2xl tracking-[0.4em] font-bold py-2.5 rounded-xl border border-[#D8D3C8] focus:outline-none focus:border-[#146C43]"
-          />
-          <button
-            onClick={async () => {
-              try {
-                const response = await fetch('/api/auth/pin/verify', {
-                  method: 'POST',
-                  credentials: 'include',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ pin: pinEntry }),
-                });
-                if (response.ok) {
-                  setLocked(false);
-                  setPinEntry('');
-                } else {
-                  const result = await response.json();
-                  notify(result.error || 'PIN verification failed.');
-                }
-              } catch (error) {
-                console.error('Failed to verify quick-unlock PIN.', error);
-                notify('PIN verification is unavailable.');
-              }
-            }}
-            className="mt-5 w-full py-3 rounded-xl bg-[#146C43] text-white font-semibold text-sm hover:bg-[#0F5434] transition"
-          >
-            {t('unlockBtn')}
-          </button>
-        </div>
       </div>
     );
   }

@@ -16,16 +16,31 @@ function AuthScreenView({
   const [phone, setPhone] = useState('');
   const [category, setCategory] = useState('Handloom, Sarees & Boutique');
   const [prefLang, setPrefLang] = useState(lang);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  const [recovering, setRecovering] = useState(false);
   const [busy, setBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  const handleTabSwitch = (nextMode) => {
-    setMode(nextMode);
+  const resetVerification = () => {
     setOtpSent(false);
     setOtpCode('');
     setErrorMsg('');
+  };
+
+  const handleTabSwitch = (nextMode) => {
+    setMode(nextMode);
+    setRecovering(false);
+    setPassword('');
+    setConfirmPassword('');
+    resetVerification();
+  };
+
+  const handleAuthComplete = async (result) => {
+    setLang(prefLang);
+    await onAuthSuccess({ shopId: result.shopId, role: result.role, preferredLang: prefLang });
   };
 
   const handleSubmit = async (event) => {
@@ -40,19 +55,65 @@ function AuthScreenView({
       setErrorMsg(t('authErrName'));
       return;
     }
+    if (mode === 'login' && !recovering && !password) {
+      setErrorMsg(t('authErrPasswordRequired'));
+      return;
+    }
+    if (mode === 'signup' || recovering) {
+      if (password.length < 12 || new TextEncoder().encode(password).length > 72) {
+        setErrorMsg(t('authErrPassword'));
+        return;
+      }
+      if (password !== confirmPassword) {
+        setErrorMsg(t('authErrPasswordMismatch'));
+        return;
+      }
+    }
+    if ((mode === 'signup' || recovering) && otpSent && !/^\d{4,10}$/.test(otpCode)) {
+      setErrorMsg(t('authErrOtp'));
+      return;
+    }
 
     setBusy(true);
     try {
-      const endpoint = otpSent ? '/api/auth/otp/verify' : '/api/auth/otp/send';
-      const payload = otpSent
-        ? {
+      if (mode === 'login' && !recovering) {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: cleanPhone, password }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Authentication failed.');
+        await handleAuthComplete(result);
+        return;
+      }
+
+      if (!otpSent) {
+        const response = await fetch('/api/auth/otp/send', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: cleanPhone }),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Could not send verification code.');
+        setOtpSent(true);
+        return;
+      }
+
+      const endpoint = recovering ? '/api/auth/password/reset' : '/api/auth/otp/verify';
+      const payload = recovering
+        ? { phone: cleanPhone, code: otpCode, password }
+        : {
             phone: cleanPhone,
             code: otpCode,
-            ...(mode === 'signup'
-              ? { ownerName: ownerName.trim(), shopName: shopName.trim(), category, language: prefLang }
-              : {}),
-          }
-        : { phone: cleanPhone };
+            password,
+            ownerName: ownerName.trim(),
+            shopName: shopName.trim(),
+            category,
+            language: prefLang,
+          };
       const response = await fetch(endpoint, {
         method: 'POST',
         credentials: 'include',
@@ -61,21 +122,28 @@ function AuthScreenView({
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Authentication failed.');
-
-      if (!otpSent) {
-        setOtpSent(true);
-        return;
-      }
-
-      setLang(prefLang);
-      await onAuthSuccess({ shopId: result.shopId, role: result.role, preferredLang: prefLang });
+      await handleAuthComplete(result);
     } catch (error) {
-      console.error('SakhiSetu OTP authentication failed.', error);
+      console.error('SakhiSetu authentication failed.', error);
       setErrorMsg(error instanceof Error ? error.message : 'Authentication failed.');
     } finally {
       setBusy(false);
     }
   };
+
+  const activeMode = recovering ? 'recovery' : mode;
+  const title = activeMode === 'login'
+    ? t('authWelcomeBack')
+    : activeMode === 'signup'
+      ? t('authCreateTitle')
+      : t('authRecoveryTitle');
+  const subtitle = otpSent
+    ? `${t('authOtpSentTo')} +91 ${phone}.`
+    : activeMode === 'login'
+      ? t('authLoginSub')
+      : activeMode === 'signup'
+        ? t('authCreateSub')
+        : t('authRecoverySub');
 
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#1E2421] flex flex-col">
@@ -118,34 +186,28 @@ function AuthScreenView({
 
       <main className="flex-1 flex items-center justify-center px-4 py-8 sm:py-12">
         <div className="w-full max-w-md bg-white rounded-2xl border border-[#EBE7E0] p-6 sm:p-8 shadow-sm space-y-6">
-          <div className="grid grid-cols-2 p-1 rounded-xl bg-[#F3F1EC] border border-[#EBE7E0]">
-            {['login', 'signup'].map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => handleTabSwitch(tab)}
-                className={`py-2 rounded-lg text-xs sm:text-sm font-bold transition ${
-                  mode === tab
-                    ? 'bg-white text-[#146C43] shadow-2xs'
-                    : 'text-[#6B726E] hover:text-[#1E2421]'
-                }`}
-              >
-                {tab === 'login' ? t('authLoginTab') : t('authSignupTab')}
-              </button>
-            ))}
-          </div>
+          {!recovering && (
+            <div className="grid grid-cols-2 p-1 rounded-xl bg-[#F3F1EC] border border-[#EBE7E0]">
+              {['login', 'signup'].map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => handleTabSwitch(tab)}
+                  className={`py-2 rounded-lg text-xs sm:text-sm font-bold transition ${
+                    mode === tab
+                      ? 'bg-white text-[#146C43] shadow-2xs'
+                      : 'text-[#6B726E] hover:text-[#1E2421]'
+                  }`}
+                >
+                  {tab === 'login' ? t('authLoginTab') : t('authSignupTab')}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-[#1E2421]">
-              {mode === 'login' ? t('authWelcomeBack') : t('authCreateTitle')}
-            </h1>
-            <p className="text-xs sm:text-sm text-[#6B726E] mt-1 leading-relaxed">
-              {otpSent
-                ? `Enter the verification code sent to +91 ${phone}.`
-                : mode === 'login'
-                  ? t('authLoginSub')
-                  : t('authCreateSub')}
-            </p>
+            <h1 className="text-xl sm:text-2xl font-bold text-[#1E2421]">{title}</h1>
+            <p className="text-xs sm:text-sm text-[#6B726E] mt-1 leading-relaxed">{subtitle}</p>
           </div>
 
           {errorMsg && (
@@ -155,7 +217,7 @@ function AuthScreenView({
           )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            {mode === 'signup' && !otpSent && (
+            {mode === 'signup' && !recovering && !otpSent && (
               <>
                 <div>
                   <label className="block text-xs font-bold text-[#1E2421] mb-1">
@@ -216,6 +278,7 @@ function AuthScreenView({
                   <input
                     type="tel"
                     inputMode="numeric"
+                    autoComplete="tel-national"
                     maxLength={10}
                     required
                     value={phone}
@@ -227,10 +290,47 @@ function AuthScreenView({
               </div>
             )}
 
+            {(mode === 'login' && !recovering || mode === 'signup' || recovering) && (
+              <div>
+                <label className="block text-xs font-bold text-[#1E2421] mb-1">
+                  {mode === 'login' && !recovering ? t('authPasswordLabel') : t('authNewPasswordLabel')}
+                </label>
+                <input
+                  type="password"
+                  autoComplete={mode === 'login' && !recovering ? 'current-password' : 'new-password'}
+                  required
+                  maxLength={72}
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCD7CD] bg-[#FAF8F5] focus:bg-white focus:border-[#146C43] focus:outline-none text-sm"
+                />
+                {(mode === 'signup' || recovering) && (
+                  <p className="mt-1 text-[11px] leading-relaxed text-[#6B726E]">{t('authPasswordHint')}</p>
+                )}
+              </div>
+            )}
+
+            {(mode === 'signup' || recovering) && (
+              <div>
+                <label className="block text-xs font-bold text-[#1E2421] mb-1">
+                  {t('authConfirmPasswordLabel')}
+                </label>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  required
+                  maxLength={72}
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCD7CD] bg-[#FAF8F5] focus:bg-white focus:border-[#146C43] focus:outline-none text-sm"
+                />
+              </div>
+            )}
+
             {otpSent && (
               <div>
                 <label className="block text-xs font-bold text-[#1E2421] mb-1">
-                  Verification code
+                  {t('authOtpLabel')}
                 </label>
                 <input
                   type="text"
@@ -240,18 +340,15 @@ function AuthScreenView({
                   required
                   value={otpCode}
                   onChange={(event) => setOtpCode(event.target.value.replace(/\D/g, ''))}
-                  placeholder="Enter SMS code"
+                  placeholder={t('authOtpPlaceholder')}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[#DCD7CD] bg-[#FAF8F5] focus:bg-white focus:border-[#146C43] focus:outline-none text-sm tracking-[0.3em]"
                 />
                 <button
                   type="button"
-                  onClick={() => {
-                    setOtpSent(false);
-                    setOtpCode('');
-                  }}
+                  onClick={resetVerification}
                   className="mt-2 text-xs font-semibold text-[#146C43] underline underline-offset-2"
                 >
-                  Change phone number
+                  {t('authChangePhone')}
                 </button>
               </div>
             )}
@@ -261,22 +358,54 @@ function AuthScreenView({
               disabled={busy || (otpSent && otpCode.length < 4)}
               className="w-full py-3 rounded-xl bg-[#146C43] hover:bg-[#0F5434] disabled:opacity-60 text-white font-bold text-sm shadow-sm transition cursor-pointer"
             >
-              {busy ? 'Please wait…' : otpSent ? 'Verify and continue' : 'Send verification code'}
+              {busy
+                ? t('authPleaseWait')
+                : mode === 'login' && !recovering
+                  ? t('authLoginSubmit')
+                  : otpSent
+                    ? t('authVerifyAndContinue')
+                    : t('authSendCode')}
             </button>
           </form>
+
+          {mode === 'login' && !recovering && (
+            <button
+              type="button"
+              onClick={() => {
+                setRecovering(true);
+                setPassword('');
+                setConfirmPassword('');
+                resetVerification();
+              }}
+              className="w-full text-xs font-semibold text-[#146C43] hover:underline"
+            >
+              {t('authForgotPassword')}
+            </button>
+          )}
+
+          {recovering && (
+            <button
+              type="button"
+              onClick={() => {
+                setRecovering(false);
+                setPassword('');
+                setConfirmPassword('');
+                resetVerification();
+              }}
+              className="w-full text-xs font-semibold text-[#146C43] hover:underline"
+            >
+              {t('authBackToLogin')}
+            </button>
+          )}
 
           {otpSent && (
             <button
               type="button"
               disabled={busy}
-              onClick={() => {
-                setOtpSent(false);
-                setOtpCode('');
-                setErrorMsg('');
-              }}
+              onClick={resetVerification}
               className="w-full text-xs font-semibold text-[#6B726E] hover:text-[#1E2421]"
             >
-              Send a new code
+              {t('authResendCode')}
             </button>
           )}
         </div>

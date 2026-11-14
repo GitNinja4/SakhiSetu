@@ -6,7 +6,7 @@ SakhiSetu is a multilingual shop ledger, inventory, customer credit, and busines
 
 You do not need to install PostgreSQL or pgAdmin to run the app locally. Neon hosts the PostgreSQL server; pgAdmin is an optional database-management client.
 
-1. Create a Neon project and database. In the Neon Console, open **SQL Editor** and run the contents of `db/migrations/001_initial_schema.sql` as the project owner.
+1. Create a Neon project and database. Test schema changes on a separate Neon branch first. In the Neon Console, open **SQL Editor** and run `db/migrations/001_initial_schema.sql`, then `db/migrations/002_password_auth.sql`, as the project owner. Apply the same migrations to the deployment branch before deploying the password-auth API. For CLI migration tools, use a direct (non-pooled) connection.
 2. Create a dedicated runtime database role. Do not use the migration/database-owner account for the API. Run the following in the Neon SQL Editor after applying the migration:
 
    ```sql
@@ -41,7 +41,7 @@ Using Neon lets this local app use a cloud database, but does not publish the ap
 
 - **Tenant database:** PostgreSQL tables are scoped by `shop_id`; row-level policies use a transaction-local shop context. The API derives that context from a signed, HTTP-only session cookie, never from a client-supplied shop identifier.
 - **Atomic ledger writes:** `POST /api/transactions` uses a PostgreSQL transaction to insert the ledger/audit records, adjust inventory by a delta, and update customer balances. `clientTxnUuid` is unique per shop for idempotent retries. Amounts, cost basis, and GST are calculated or checked server-side.
-- **Authentication and roles:** OTP verification uses Twilio Verify; sessions are short-lived JWT cookies. Quick-unlock PINs are bcrypt-hashed. Owners can invite staff/accountants; staff are limited to sales, and the passport export endpoint denies staff access.
+- **Authentication and roles:** New owners verify their phone with Twilio SMS OTP and set a password; they then sign in with phone and password. Existing OTP-only accounts and invited staff can set or reset a password after OTP verification. Passwords are bcrypt-hashed and sessions use short-lived HTTP-only JWT cookies. Quick-unlock PIN login has been removed. Owners can invite staff/accountants; staff are limited to sales, and the passport export endpoint denies staff access.
 - **Offline/PWA:** Business state and pending transactions use Dexie/IndexedDB. Pending transactions are retried when connectivity returns. A first-party service worker caches the app shell and does not cache API responses.
 - **AI/payments/monitoring:** Gemini parsing is proxied through `/api/sakhi/parse`; Razorpay payment links are created server-side and a signed webhook updates payment verification. Frontend errors can be sent to Sentry when `VITE_SENTRY_DSN` is configured.
 
@@ -50,7 +50,7 @@ Using Neon lets this local app use a cloud database, but does not publish the ap
 This codebase is **not yet production-ready**. Before handling real financial records:
 
 - Configure Twilio Verify, Gemini, Razorpay, and Sentry credentials in the hosting provider's secret manager; set Razorpay's webhook URL to `/api/payments/webhook/razorpay` and subscribe to `payment_link.paid`.
-- Apply and test migrations using a non-owner API database role. Add automated integration tests for RLS isolation, OTP, idempotent retries, concurrent stock changes, and signed webhooks.
+- Test migrations on a Neon branch before applying them to the deployment branch; run production migrations with a direct connection and the database-owner role, then run the app with the non-owner API role. Add automated integration tests for RLS isolation, password/OTP flows, idempotent retries, concurrent stock changes, and signed webhooks.
 - Choose and configure Bhashini or Sarvam for regional speech input/output. Browser speech is still used as a fallback; server-side regional speech endpoints are not implemented.
 - Configure WhatsApp Business templates and a scheduled due-date/reminder worker. Automated WhatsApp reminders are not implemented.
 - Provision frontend/API hosting, TLS, managed PostgreSQL point-in-time recovery/backups, deployment secrets, server-side error monitoring, and an operational restore procedure.
