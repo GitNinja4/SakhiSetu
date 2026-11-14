@@ -38,6 +38,16 @@ textarea {
   --red-surface: #3b2523;
 }
 
+:root[data-theme='dark'] select option {
+  color: var(--text-primary);
+  background-color: var(--surface);
+}
+
+:root[data-theme='dark'] select option:checked {
+  color: var(--text-primary);
+  background-color: #315c3d;
+}
+
 :root[data-theme='dark'] body {
   background-color: var(--app-background);
   color: var(--text-primary);
