@@ -2,7 +2,7 @@ import React from 'react';
 import { Mic, ChevronRight, DollarSign, Wallet, BarChart3, HeartPulse } from 'lucide-react';
 import { LANG_META } from '../../../i18n/translations';
 
-function OverviewPage({ state, metrics, t, lang, onOpenSakhi, onNavigate, onOpenQuickEntry }) {
+function OverviewPage({ state, metrics, t, lang, browserOnline, pendingSyncCount, onOpenSakhi, onNavigate, onOpenQuickEntry }) {
   const loc = LANG_META.find((l) => l.code === lang)?.locale || 'en-IN';
   const todayLabel = new Date()
     .toLocaleDateString(loc, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
@@ -21,7 +21,7 @@ function OverviewPage({ state, metrics, t, lang, onOpenSakhi, onNavigate, onOpen
             <span>{todayLabel}</span>
             <span className="w-1.5 h-1.5 rounded-full bg-[#146C43]" />
             <span className="text-[#146C43]">
-              {state.offlineMode ? t('offlineQueueActive') : t('allCaughtUp')}
+              {!browserOnline || pendingSyncCount > 0 ? t('offlineQueueActive') : t('allCaughtUp')}
             </span>
           </div>
           <h1 className="text-3xl sm:text-[40px] font-bold tracking-tight text-[#1E2421] leading-[1.15] mt-2">

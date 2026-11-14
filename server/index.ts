@@ -441,7 +441,6 @@ app.get('/api/business-state', { preHandler: authenticate }, async (request: any
       udyamNo: settings.udyamNo || '',
       language: settings.language || 'en',
     },
-    offlineMode: false,
     products: rows.products.map((product: any) => ({
       id: product.id,
       sku: product.sku,

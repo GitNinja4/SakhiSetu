@@ -81,7 +81,6 @@ export interface AuditLogEntry {
 
 export interface BusinessState {
   profile: BusinessProfile;
-  offlineMode: boolean;
   products: Product[];
   customers: Customer[];
   transactions: Transaction[];

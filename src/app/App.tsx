@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Home, Receipt, Package, Users, Sparkles, BookOpen, Settings, Mic, Send, Globe, Volume2, VolumeX, Square, Check, Menu, LogOut, X } from 'lucide-react';
+import { Home, Receipt, Package, Users, Sparkles, BookOpen, Settings, Mic, Send, Globe, Volume2, VolumeX, Square, Check, Menu, LogOut, X, Moon, Sun } from 'lucide-react';
 import { LANG_META, I18N } from '../i18n/translations';
 import { calculateMetrics } from '../domain/metrics';
 import { parseSakhiIntent } from '../domain/intentParser';
@@ -17,6 +17,19 @@ import LearnAndSchemesPage from '../features/learning/LearnAndSchemesPage';
 import SettingsPage from '../features/settings/SettingsPage';
 import QuickRecordModal from '../features/transactions/QuickRecordModal';
 
+const THEME_STORAGE_KEY = 'sakhisetu-theme';
+
+function getInitialTheme() {
+  let theme = 'light';
+  try {
+    theme = window.localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+  } catch (error) {
+    console.error('Failed to read the saved SakhiSetu theme.', error);
+  }
+  document.documentElement.dataset.theme = theme;
+  return theme;
+}
+
 function App() {
   const [entryView, setEntryView] = useState('welcome');
   const [authMode, setAuthMode] = useState('login');
@@ -24,6 +37,7 @@ function App() {
   const [state, setState, hydratedShopId] = useBusinessState(sessionShopId);
   const [userRole, setUserRole] = useState(null);
   const [browserOnline, setBrowserOnline] = useState(() => navigator.onLine);
+  const [theme, setTheme] = useState(getInitialTheme);
 
   const [activePage, setActivePage] = useState('overview');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -43,6 +57,17 @@ function App() {
   const profileMenuRef = useRef(null);
   const speechFallbackTimerRef = useRef(null);
   const chatScrollRef = useRef(null);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) themeColor.setAttribute('content', theme === 'dark' ? '#111813' : '#FAF8F5');
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch (error) {
+      console.error('Failed to save the SakhiSetu theme preference.', error);
+    }
+  }, [theme]);
 
   useEffect(() => {
     if (!profileMenuOpen) return undefined;
@@ -165,7 +190,6 @@ function App() {
     if (
       !sessionShopId ||
       sessionShopId === 'demo' ||
-      state.offlineMode ||
       !browserOnline ||
       pendingSyncCount === 0
     ) return;
@@ -204,7 +228,6 @@ function App() {
     };
   }, [
     sessionShopId,
-    state.offlineMode,
     state.transactions,
     pendingSyncCount,
     browserOnline,
@@ -336,7 +359,7 @@ function App() {
     if (!clean) return;
     const userBubble = { id: `m-${Date.now()}`, role: 'user', text: clean };
     let parsed = parseSakhiIntent(clean, state, metrics);
-    if (sessionShopId && sessionShopId !== 'demo' && browserOnline && !state.offlineMode) {
+    if (sessionShopId && sessionShopId !== 'demo' && browserOnline) {
       try {
         const response = await fetch('/api/sakhi/parse', {
           method: 'POST',
@@ -645,28 +668,13 @@ function App() {
             </div>
 
             <button
-              onClick={() => {
-                if (state.offlineMode) {
-                  setState((prev) => ({ ...prev, offlineMode: false }));
-                  notify(pendingSyncCount ? 'Reconnecting and syncing saved entries…' : t('onlineSynced'));
-                } else {
-                  setState((prev) => ({ ...prev, offlineMode: true }));
-                  notify(t('offlineQueueActive'));
-                }
-              }}
-              title={state.offlineMode ? t('offlineClickSync') : t('onlineSynced')}
-              className="flex items-center gap-1.5 px-2 py-1 rounded-full hover:bg-[#EFECE6] transition"
+              type="button"
+              onClick={() => setTheme((currentTheme) => currentTheme === 'dark' ? 'light' : 'dark')}
+              title={theme === 'dark' ? t('switchToLightMode') : t('switchToDarkMode')}
+              aria-label={theme === 'dark' ? t('switchToLightMode') : t('switchToDarkMode')}
+              className="p-2 rounded-lg text-[#4F5652] hover:bg-[#EFECE6] transition focus:outline-none focus:ring-2 focus:ring-[#146C43]"
             >
-              <span
-                className={`w-2.5 h-2.5 rounded-full border ${
-                  state.offlineMode
-                    ? 'bg-amber-400 border-amber-600'
-                    : 'bg-transparent border-[#9AA19D]'
-                }`}
-              />
-              {pendingSyncCount > 0 && (
-                <span className="text-[11px] font-bold text-amber-800">{pendingSyncCount}</span>
-              )}
+              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
 
             <div className="relative" ref={profileMenuRef}>
@@ -728,6 +736,8 @@ function App() {
               metrics={metrics}
               t={t}
               lang={lang}
+              browserOnline={browserOnline}
+              pendingSyncCount={pendingSyncCount}
               onOpenSakhi={() => setSakhiDrawerOpen(true)}
               onNavigate={setActivePage}
               onOpenQuickEntry={() => setQuickEntryOpen(true)}

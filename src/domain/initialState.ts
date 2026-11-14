@@ -12,7 +12,6 @@ export const INITIAL_STATE: BusinessState = {
     udyamNo: 'UDYAM-BR-26-0094812',
     language: 'en',
   },
-  offlineMode: false,
   products: [
     { id: 'P-101', sku: 'SR-01', name: 'Cotton Handloom Saree', category: 'Apparel', sellingPrice: 850, costPrice: 560, stock: 18, minStock: 6, unit: 'pcs' },
     { id: 'P-102', sku: 'KR-02', name: 'Chikankari Kurti Set', category: 'Apparel', sellingPrice: 1150, costPrice: 740, stock: 12, minStock: 5, unit: 'pcs' },
@@ -50,7 +49,6 @@ export function createEmptyBusinessState(profile: Partial<BusinessState['profile
       ...INITIAL_STATE.profile,
       ...profile,
     },
-    offlineMode: false,
     products: [],
     customers: [],
     transactions: [],
