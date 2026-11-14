@@ -1,0 +1,17 @@
+{
+  "name": "SakhiSetu",
+  "short_name": "SakhiSetu",
+  "description": "Offline-ready shop ledger and inventory",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FAF8F5",
+  "theme_color": "#146C43",
+  "icons": [
+    {
+      "src": "/sakhisetu.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
