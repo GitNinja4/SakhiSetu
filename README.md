@@ -2,10 +2,12 @@
 
 SakhiSetu is a multilingual shop ledger, inventory, customer credit, and business-insights application. The repository now includes a Fastify/PostgreSQL backend foundation and an IndexedDB-backed frontend; provider credentials and production infrastructure are configured outside the source tree.
 
-## Local development
+## Local development with Neon
 
-1. Create a PostgreSQL database and apply `db/migrations/001_initial_schema.sql`.
-2. Create a dedicated runtime database role. Do not use the migration/database-owner account for the API:
+You do not need to install PostgreSQL or pgAdmin to run the app locally. Neon hosts the PostgreSQL server; pgAdmin is an optional database-management client.
+
+1. Create a Neon project and database. In the Neon Console, open **SQL Editor** and run the contents of `db/migrations/001_initial_schema.sql` as the project owner.
+2. Create a dedicated runtime database role. Do not use the migration/database-owner account for the API. Run the following in the Neon SQL Editor after applying the migration:
 
    ```sql
    CREATE ROLE sakhisetu_api LOGIN PASSWORD 'set-a-secret-outside-source-control' NOBYPASSRLS;
@@ -21,7 +23,7 @@ SakhiSetu is a multilingual shop ledger, inventory, customer credit, and busines
    ```
 
    The API role must not own these tables and must not have `BYPASSRLS`. The authentication/payment functions are deliberately not executable by `PUBLIC`.
-3. Copy `.env.example` to `.env`, set `DATABASE_URL` to the `sakhisetu_api` connection and provide a random `SESSION_SECRET` of at least 32 characters. Add provider credentials only to the server environment.
+3. In Neon, open **Connect**, select the branch, database, and `sakhisetu_api` role, and copy the pooled connection string. Copy `.env.example` to `.env` and replace `DATABASE_URL` with that connection string. Keep its credentials private. Set a random `SESSION_SECRET` of at least 32 characters. Add provider credentials only to the server environment.
 4. Install packages and run the frontend and API in separate terminals:
 
    ```bash
@@ -32,6 +34,8 @@ SakhiSetu is a multilingual shop ledger, inventory, customer credit, and busines
 
    Vite proxies `/api` requests to the local Fastify server. `npm run build` checks both TypeScript projects and builds the PWA shell.
    The API container can be built with `docker build -f Dockerfile.api -t sakhisetu-api .`; inject its secrets through the container host, not the image.
+
+Using Neon lets this local app use a cloud database, but does not publish the app to other devices. Remote users also need the frontend and API deployed; set `DATABASE_URL` in the API host's secret settings, never in frontend code.
 
 ## Architecture currently in the repository
 

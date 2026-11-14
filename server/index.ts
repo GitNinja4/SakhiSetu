@@ -61,7 +61,7 @@ app.setErrorHandler((error, _request, reply) => {
       : error && typeof error === 'object' && 'statusCode' in error
         ? Number(error.statusCode)
         : 500;
-  const statusCode = Number.isInteger(status) && status >= 400 && status < 500 ? status : 500;
+  const statusCode = Number.isInteger(status) && status >= 400 && status < 600 ? status : 500;
   reply.code(statusCode).send({
     error: statusCode === 500
       ? 'Internal server error'
