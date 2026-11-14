@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://sakhisetu-api.onrender.com/api/:path*"
+    }
+  ]
+}
