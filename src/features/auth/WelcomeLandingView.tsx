@@ -92,26 +92,6 @@ function WelcomeLandingView({ lang, setLang, t, onNavigateAuth, onQuickDemo }) {
               </button>
             </div>
 
-            {onQuickDemo && (
-              <div className="pt-1">
-                <button
-                  onClick={onQuickDemo}
-                  className="group inline-flex w-full sm:w-auto items-center justify-between gap-3 rounded-2xl border border-[#DED2EE] bg-white/80 px-3.5 py-2.5 text-left shadow-sm transition hover:border-[#BFA8DE] hover:bg-white hover:shadow-md"
-                >
-                  <span className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F1EAF8] text-[#6B3FA0]">
-                      <Zap className="w-4 h-4" />
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block text-xs sm:text-sm font-bold text-[#49336A]">{t('welcomeDemoBtn')}</span>
-                      <span className="mt-0.5 block text-[11px] text-[#746784]">{t('welcomeDemoNote')}</span>
-                    </span>
-                  </span>
-                  <ArrowRight className="w-4 h-4 shrink-0 text-[#6B3FA0] transition-transform group-hover:translate-x-0.5" />
-                </button>
-              </div>
-            )}
-
             <div className="lg:hidden relative pt-3 sm:pt-5">
               <div aria-hidden="true" className="absolute inset-x-5 top-5 bottom-0 rotate-2 rounded-[1.75rem] bg-[#DDEFE4]" />
               <div className="relative overflow-hidden rounded-[1.6rem] border border-white/90 bg-white/90 p-3.5 sm:p-5 shadow-[0_24px_60px_-32px_rgba(27,72,48,0.5)] backdrop-blur">
@@ -217,7 +197,27 @@ function WelcomeLandingView({ lang, setLang, t, onNavigateAuth, onQuickDemo }) {
           </div>
         </div>
 
-        <section className="hidden sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-12 sm:mt-16">
+        {onQuickDemo && (
+          <div className="mt-5 sm:mt-8 flex justify-center">
+            <button
+              onClick={onQuickDemo}
+              className="group inline-flex w-full sm:w-auto max-w-md items-center justify-between gap-3 rounded-2xl border border-[#DED2EE] bg-white/80 px-3.5 py-2.5 text-left shadow-sm transition hover:border-[#BFA8DE] hover:bg-white hover:shadow-md"
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#F1EAF8] text-[#6B3FA0]">
+                  <Zap className="w-4 h-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs sm:text-sm font-bold text-[#49336A]">{t('welcomeDemoBtn')}</span>
+                  <span className="mt-0.5 block text-[11px] text-[#746784]">{t('welcomeDemoNote')}</span>
+                </span>
+              </span>
+              <ArrowRight className="w-4 h-4 shrink-0 text-[#6B3FA0] transition-transform group-hover:translate-x-0.5" />
+            </button>
+          </div>
+        )}
+
+        <section className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mt-7 sm:mt-12">
           {[
             { icon: Mic, title: t('welcomeFeat1Title'), desc: t('welcomeFeat1Desc'), accent: 'text-[#146C43] bg-[#EAF5EE]' },
             { icon: Sparkles, title: t('welcomeFeat2Title'), desc: t('welcomeFeat2Desc'), accent: 'text-[#6B3FA0] bg-[#EFE7FA]' },
@@ -226,12 +226,12 @@ function WelcomeLandingView({ lang, setLang, t, onNavigateAuth, onQuickDemo }) {
           ].map((feat, i) => {
             const IconComp = feat.icon;
             return (
-              <div key={i} className="bg-white rounded-2xl border border-[#EBE7E0] p-5 space-y-2.5">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${feat.accent}`}>
+              <div key={i} className="bg-white rounded-2xl border border-[#EBE7E0] p-3.5 sm:p-5 space-y-2 sm:space-y-2.5">
+                <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center ${feat.accent}`}>
                   <IconComp className="w-4 h-4" />
                 </div>
-                <h3 className="font-bold text-sm text-[#1E2421]">{feat.title}</h3>
-                <p className="text-xs text-[#6B726E] leading-relaxed">{feat.desc}</p>
+                <h3 className="font-bold text-xs sm:text-sm text-[#1E2421]">{feat.title}</h3>
+                <p className="hidden sm:block text-xs text-[#6B726E] leading-relaxed">{feat.desc}</p>
               </div>
             );
           })}
