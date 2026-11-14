@@ -295,7 +295,6 @@ function App() {
   };
 
   const handleQuickDemo = () => {
-    if (!import.meta.env.DEV) return;
     setSessionShopId('demo');
     setLocked(false);
     setActivePage('overview');
@@ -469,7 +468,7 @@ function App() {
         setLang={setLang}
         t={t}
         onNavigateAuth={handleNavigateAuth}
-        onQuickDemo={import.meta.env.DEV ? handleQuickDemo : undefined}
+        onQuickDemo={handleQuickDemo}
       />
     );
   }
