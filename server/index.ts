@@ -210,17 +210,20 @@ app.post('/api/auth/otp/send', {
     body: new URLSearchParams({ To: phone, Channel: 'sms' }),
   });
   if (!response.ok) {
-    let providerCode: number | string | undefined;
+    let providerCode: number | undefined;
     try {
       const providerError = await response.json();
-      if (typeof providerError.code === 'number' || typeof providerError.code === 'string') {
+      if (typeof providerError.code === 'number' && Number.isInteger(providerError.code)) {
         providerCode = providerError.code;
       }
     } catch (error) {
       app.log.warn({ status: response.status }, 'OTP provider returned unreadable error details');
     }
     app.log.error({ status: response.status, providerCode }, 'OTP provider rejected send request');
-    return reply.code(502).send({ error: 'Could not send verification code.' });
+    const message = providerCode === undefined
+      ? 'Could not send verification code.'
+      : `Could not send verification code (provider error ${providerCode}).`;
+    return reply.code(502).send({ error: message });
   }
   return reply.code(202).send({ status: 'pending' });
 });
